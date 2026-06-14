@@ -3,15 +3,17 @@ import logging
 import websockets
 import json
 
-from modules import database
-from config import (
+from db import database
+from app.config import (
     SERVER_API_KEY,
     SERVER_WS_URL,
     WEBSOCKET_RECONNECT_DEBOUNCE,
     LAPTOP_WS_URL,
 )
 
-from modules.appcontext import AppContext, ProbeData
+from app.context import AppContext
+
+from models.probe_data import ProbeData
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -140,9 +142,7 @@ async def initialize_server_connection(ctx: AppContext):
 
 async def main(ctx):
 
-    await asyncio.gather(
-        initialize_server_connection(ctx), initalize_laptop_connection(ctx)
-    )
+    await asyncio.gather(initialize_server_connection(ctx))
 
 
 def run_websocket_loops(ctx: AppContext):

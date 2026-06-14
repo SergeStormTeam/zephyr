@@ -29,4 +29,4 @@ COPY --from=base /src/.venv /src/.venv
 COPY src /src
 
 WORKDIR /src
-CMD ["uv", "run", "python", "main.py"]
+CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--log-config", "/src/logging_config.yaml", "--log-level", "info"]

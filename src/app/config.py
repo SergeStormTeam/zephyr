@@ -1,22 +1,10 @@
 import os
 import logging
-import uuid_utils as uuid
 from dotenv import load_dotenv
 
 load_dotenv()
 
 logger: logging.Logger = logging.getLogger(__name__)
-
-
-def _generate_session_id() -> str:
-    """
-    Generates a New UUID using the UUID7 formating
-
-    Returns:
-        str: The generated UUID in string form
-    """
-    generated_uuid: uuid.UUID = uuid.uuid7()
-    return str(generated_uuid)
 
 
 def _get_env_variable(name: str, default: str | None = None) -> str | None:
@@ -48,11 +36,8 @@ def _get_env_variable(name: str, default: str | None = None) -> str | None:
 
 # General Settings
 BASE_DIR: str = os.path.dirname(os.path.abspath(__file__))
-SESSION_ID: str = _generate_session_id()
 
 # Server Settings
-SEND_DATA_TO_SERVER: bool = True
-
 WEBSOCKET_RECONNECT_DEBOUNCE: int = 20
 DATABASE_BACKUP_DEBOUNCE: int = 3
 DATABASE_UPLOAD_BATCH_SIZE: int = 150

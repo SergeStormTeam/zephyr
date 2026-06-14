@@ -1,97 +1,96 @@
 from logging import getLogger, Logger
 
-import adafruit_sgp30
+import adafruit_sgp30 as SGP30
 import board
 import busio
-import time
-from modules.appcontext import AppContext
 
+import time
+from datetime import datetime, timedelta
+from sensors.base import BaseSensor
+from db import database
 
 logger: Logger = getLogger(__name__)
 
-sensor: adafruit_sgp30.Adafruit_SGP30 | None = None
-I2C: busio.I2C | None = None
 
-current_eco2: float = 0
-current_tvoc: float = 0
+class SGP30Sensor(BaseSensor):
+    def __init__(self, ctx):
+        super().__init__(ctx)
+        self.i2c: busio.I2C | None = None
+        self.sensor: SGP30.Adafruit_SGP30 | None = None
+        self.sensor_name = "SGP30"
+        self.baseline_saved_at: datetime
+        self.cur_eco2: float = 0
+        self.cur_tvoc: float = 0
 
+        db, cursor = database.create_new_connection()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sgp30 (
+                singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
 
-def get_co2() -> dict[str, float]:
-    """
-    Returns the latest eco2 reading from the sensor safely
+                co2_baseline INTEGER NOT NULL,
+                voc_baseline INTEGER NOT NULL,
+                timestamp REAL NOT NULL
+            );
+        """)
+        db.commit()
+        db.close()
 
-    Returns:
-        dict[str, int]: The eco2 recorded with the key "co2"
-    """
-    global current_eco2
+    def _connect(self) -> None:
+        self.i2c = busio.I2C(board.SCL, board.SDA)
+        self.sensor = SGP30.Adafruit_SGP30(self.i2c)
+        self.baseline_saved_at = datetime.now()
 
-    return {"co2": current_eco2}
+        db, cursor = database.create_new_connection()
 
+        row = cursor.execute("""
+           SELECT co2_baseline, voc_baseline
+            FROM sgp30
+            WHERE singleton = 1;
+        """).fetchone()
 
-def get_voc() -> dict[str, float]:
-    """
-    Returns the latest tvoc reading from the sensor safely
+        if row:
+            self.sensor.set_iaq_baseline(row["co2_baseline"], row["voc_baseline"])
 
-    Returns:
-        dict[str, int]: The tvoc recorded with the key "voc"
-    """
-    global current_tvoc
+        db.commit()
+        db.close()
 
-    return {"voc": current_tvoc}
+        self.sensor.iaq_init()
+        time.sleep(15)
+        return
 
+    def _disconnect(self) -> None:
+        return
 
-def get_read_functions():
-    """
-    Returns the list of functions to be processed
-    """
-    return [get_co2, get_voc]
+    def update(self) -> Exception | None:
 
+        if not self.sensor:
+            raise RuntimeError("BME280 was not initalized!")
 
-def update(ctx: AppContext) -> None:
-    """
-    Attempts to update the SGP30 sensors' pressure and humidity. using the BME280s recent readings to calibrate
+        if (
+            self.ctx.latest_reading
+            and self.ctx.latest_reading.temperature
+            and self.ctx.latest_reading.humidity
+        ):
+            self.sensor.set_iaq_relative_humidity(
+                self.ctx.latest_reading.temperature, self.ctx.latest_reading.humidity
+            )
 
-    Arguments:
-        ctx (AppContext): The running app context
-    """
-    global sensor, current_tvoc, current_eco2
+        self.cur_eco2 = self.sensor.eCO2
+        self.cur_tvoc = self.sensor.TVOC
 
-    if not sensor:
-        raise RuntimeError("SGP30 was not initalized!")
+        if datetime.now() > (self.baseline_saved_at + timedelta(minutes=15)):
+            db, cursor = database.create_new_connection()
 
-    if (
-        ctx.latest_reading
-        and ctx.latest_reading.temperature
-        and ctx.latest_reading.humidity
-    ):
-        sensor.set_iaq_relative_humidity(
-            ctx.latest_reading.temperature, ctx.latest_reading.humidity
-        )
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO sgp30 (singleton, co2_baseline, voc_baseline, timestamp) VALUES (1, ?, ?, ?)
+            """,
+                (self.sensor.baseline_eCO2, self.sensor.baseline_TVOC, time.time()),
+            )
 
-    current_eco2 = sensor.eCO2
-    current_tvoc = sensor.TVOC
+            db.commit()
+            db.close()
+        return
 
-
-def init_sensor(_) -> bool:
-    """
-    Attempts to initalize the SGP30 sensor.
-
-    Arguments:
-        ctx (AppContext): The running app context
-
-    Returns:
-        bool: If the sensor was able to successfully boot or not
-    """
-    global I2C, sensor
-
-    I2C = busio.I2C(board.SCL, board.SDA)
-    sensor = adafruit_sgp30.Adafruit_SGP30(I2C)
-    sensor.iaq_init()
-    time.sleep(15)
-    # logger.info("Attempting to Initialize the BME280")
-    # I2C = busio.I2C(board.SCL, board.SDA)
-    # sensor = BME280.Adafruit_BME280_I2C(I2C)
-
-    # sensor.sea_level_pressure = SEA_LEVEL_PRESSURE
-    # logger.info("BME280 Initialized!")
-    return True
+    def read(self) -> dict[str, float]:
+        return {"co2": self.cur_eco2, "voc": self.cur_tvoc}

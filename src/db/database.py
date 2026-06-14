@@ -1,23 +1,23 @@
 import sqlite3
 import logging
 import os
-import multiprocessing
 import queue
 
-from config import (
+from app.config import (
     BASE_DIR,
     DATABASE_FILENAME,
     DATABASE_QUEUE_MAX_SIZE,
-    SESSION_ID,
     DATABASE_UPLOAD_BATCH_SIZE,
 )
-from modules.appcontext import AppContext, ProbeData, ProbeEvent
+from app.context import AppContext
+
+from models.probe_data import ProbeData
+from models.probe_event import ProbeEvent
+
 from typing import Any
 
 logger: logging.Logger = logging.getLogger(__name__)
-database_queue: multiprocessing.Queue = multiprocessing.Queue(
-    maxsize=DATABASE_QUEUE_MAX_SIZE
-)
+database_queue: queue.Queue = queue.Queue(maxsize=DATABASE_QUEUE_MAX_SIZE)
 
 
 def log_event(message: str, level: int) -> None:
@@ -45,7 +45,7 @@ def log_sensor_data(data_entry: ProbeData) -> None:
     database_queue.put(data_entry)
 
 
-def process_sensor_data(cursor: sqlite3.Cursor, d: ProbeData) -> None:
+def process_sensor_data(ctx: AppContext, cursor: sqlite3.Cursor, d: ProbeData) -> None:
     """
     Parses data from the sensor to be written to the porbe_data database.
 
@@ -55,14 +55,15 @@ def process_sensor_data(cursor: sqlite3.Cursor, d: ProbeData) -> None:
     """
     cursor.execute(
         """
-    INSERT INTO data (id, timestamp, session_id, sequence, humidity, pressure, voc, wind_speed, co2, precipitation)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO data (id, timestamp, session_id, sequence, temperature, humidity, pressure, voc, wind_speed, co2, precipitation)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """,
         (
             d.record_id,
             d.timestamp,
-            SESSION_ID,
+            ctx.session_id,
             d.sequence,
+            d.temperature,
             d.humidity,
             d.pressure,
             d.voc,
@@ -73,7 +74,7 @@ def process_sensor_data(cursor: sqlite3.Cursor, d: ProbeData) -> None:
     )
 
 
-def process_log_event(cursor: sqlite3.Cursor, d: ProbeEvent) -> None:
+def process_log_event(ctx: AppContext, cursor: sqlite3.Cursor, d: ProbeEvent) -> None:
     """
     Parses data from the sensor to be written to the events database.
 
@@ -86,7 +87,7 @@ def process_log_event(cursor: sqlite3.Cursor, d: ProbeEvent) -> None:
     INSERT INTO events (id, timestamp, session_id,  message, severity)
     VALUES (?, ?, ?, ?, ?)
     """,
-        (d.record_id, d.timestamp, SESSION_ID, d.message, d.severity),
+        (d.record_id, d.timestamp, ctx.session_id, d.message, d.severity),
     )
 
 
@@ -180,6 +181,23 @@ def update_sent_data(
     return
 
 
+def create_new_connection() -> tuple[sqlite3.Connection, sqlite3.Cursor]:
+    """
+    Creates a new DB and Cursor connection to use
+
+    Returns:
+        sqlite3.Connection: The connection object (the database)
+        sqlite3.Cursor: The cursor object (the cursor)
+    """
+
+    db: sqlite3.Connection = sqlite3.connect(
+        f"{BASE_DIR}/data/{DATABASE_FILENAME}", timeout=30.0
+    )
+    cursor: sqlite3.Cursor = db.cursor()
+
+    return db, cursor
+
+
 def initialize_database() -> None:
     """
     Attempts to initalize the SQLite database, creating necessary tables if they do not exist
@@ -242,6 +260,7 @@ def initialize_database() -> None:
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_data_unsent ON events (sent) WHERE sent = 0;
         """)
+
         db.commit()
         db.close()
     except sqlite3.OperationalError as e:
@@ -279,9 +298,9 @@ def update_database_loop(ctx: AppContext):
 
             try:
                 if isinstance(new_entry, ProbeEvent):
-                    process_log_event(cursor, new_entry)
+                    process_log_event(ctx, cursor, new_entry)
                 elif isinstance(new_entry, ProbeData):
-                    process_sensor_data(cursor, new_entry)
+                    process_sensor_data(ctx, cursor, new_entry)
                 else:
                     logger.warning(f"Unknown entry in the queue! {new_entry}")
             except Exception as e:
@@ -294,11 +313,3 @@ def update_database_loop(ctx: AppContext):
     finally:
         loop_database.commit()
         loop_database.close()
-
-
-def trigger_shutdown():
-    """
-    Triggers the shutdown flag for the database to save data and exit
-    """
-    global shutting_down
-    shutting_down = True

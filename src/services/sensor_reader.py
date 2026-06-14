@@ -1,35 +1,39 @@
-import types
 import time
 import logging
 
-from sensors import bme280, sgp30
-from config import SENSOR_FAIL_SHUTDOWN_LIMIT, SENSOR_READING_DEBOUNCE_TIME
-from modules import database
-from modules.appcontext import AppContext, ProbeData
+from sensors.base import BaseSensor
+from sensors.bme280 import BME280Sensor
+from sensors.sgp30 import SGP30Sensor
 
-LOADED_SENSORS: list[types.ModuleType] = [bme280, sgp30]
+from app.config import SENSOR_FAIL_SHUTDOWN_LIMIT, SENSOR_READING_DEBOUNCE_TIME
+from db import database
+from app.context import AppContext, ProbeData
 
-sensor_map: dict[types.ModuleType, list[types.FunctionType]] = {}
-failed_sensors: dict[types.ModuleType, int] = {}
+SENSOR_LIST: list[type[BaseSensor]] = [BME280Sensor, SGP30Sensor]
+
+loaded_sensors: set[BaseSensor] = set()
+failed_sensors: dict[BaseSensor, int] = {}
 
 logger: logging.Logger = logging.getLogger(__name__)
 current_sequence_number: int = 1
 
 
-def process_failed_sensor(sensor: types.ModuleType, e: Exception) -> None:
+def process_failed_sensor(sensor: BaseSensor, e: Exception) -> None:
     """
     Processes a failed sensor, removing it from running sensors if above the configurated SENSOR_FAIL_SHUTDOWN_LIMIT
 
     Arguments:
         sensor (types.ModuleType): The sensor that failed
     """
-    global sensor_map, failed_sensors, logger
+    global loaded_sensors, failed_sensors
 
     if sensor in failed_sensors:
         failed_sensors[sensor] += 1
         if failed_sensors[sensor] > SENSOR_FAIL_SHUTDOWN_LIMIT:
-            sensor_map.pop(sensor, None)
+            if sensor in loaded_sensors:
+                loaded_sensors.remove(sensor)
             failed_sensors.pop(sensor, None)
+
             logger.warning(
                 f"SENSOR {sensor.__name__} HAS FAILED MORE THAN {SENSOR_FAIL_SHUTDOWN_LIMIT} TIMES, REMOVING IT FROM PROCESSING!"
             )
@@ -42,16 +46,16 @@ def process_failed_sensor(sensor: types.ModuleType, e: Exception) -> None:
         failed_sensors[sensor] = 1
 
     logger.warning(
-        f"SENSOR {sensor.__name__} HAS FAILED {failed_sensors[sensor]} TIMES! SENSOR WILL CONTINUE TO BE PROCESSED"
+        f"SENSOR {sensor.sensor_name} HAS FAILED {failed_sensors[sensor]} TIMES! SENSOR WILL CONTINUE TO BE PROCESSED"
     )
 
     database.log_event(
-        f"SENSOR {sensor.__name__} HAS FAILED {failed_sensors[sensor]} TIMES! SENSOR WILL CONTINUE TO BE PROCESSED: {e}",
+        f"SENSOR {sensor.sensor_name} HAS FAILED {failed_sensors[sensor]} TIMES! SENSOR WILL CONTINUE TO BE PROCESSED: {e}",
         logging.WARNING,
     )
 
 
-def update_sensor(ctx, sensor: types.ModuleType) -> Exception | None:
+def update_sensor(sensor: BaseSensor) -> Exception | None:
     """
     Processes a sensor, safely updating attributes to be read
 
@@ -61,8 +65,14 @@ def update_sensor(ctx, sensor: types.ModuleType) -> Exception | None:
     global sensor_map, failed_sensors, logger
 
     try:
-        sensor.update(ctx)
-        return None
+        err = sensor.update()
+
+        if err:
+            raise err
+
+        if sensor in failed_sensors:
+            failed_sensors.pop(sensor)
+
     except Exception as e:
         logger.warning(f"SENSOR {sensor.__name__} FAILED WITH ERROR: {e}")
         process_failed_sensor(sensor, e)
@@ -73,66 +83,52 @@ def initalize_sensors(ctx) -> None:
     """
     Loads all sensors from the LOADED SENSORS, ensuring that both an "update" and "get_read_functions" exists
     """
-    global LOADED_SENSORS, sensor_map
+    global loaded_sensors
 
     logger.info("Attempting to Load Sensors!")
 
-    for sensor in LOADED_SENSORS:
-        if not hasattr(sensor, "init_sensor"):
-            logger.warning(
-                f"SENSOR {sensor.__name__} DOES NOT HAVE AN update FUNCTION! PASSING SENSOR FROM LOADING"
-            )
-            continue
-
-        if not hasattr(sensor, "update"):
-            logger.warning(
-                f"SENSOR {sensor.__name__} DOES NOT HAVE AN update FUNCTION! PASSING SENSOR FROM LOADING"
-            )
-            continue
-
-        if not hasattr(sensor, "get_read_functions"):
-            logger.warning(
-                f"SENSOR {sensor.__name__} DOES NOT HAVE get_read_functions FUNCTION! PASSING SENSOR FROM LOADING"
-            )
-            continue
+    for sensor in SENSOR_LIST:
+        new_sensor = sensor(ctx)
 
         try:
-            sensor_map[sensor] = sensor.init_sensor(ctx)
+            new_sensor.start()
+            loaded_sensors.add(new_sensor)
         except Exception:
-            logger.exception(f"SENSOR {sensor.__name__} FAILED TO INITALIZE!")
+            logger.exception(f"SENSOR {new_sensor.sensor_name} FAILED TO INITALIZE!")
             continue
 
-        sensor_map[sensor] = sensor.get_read_functions()
+        logger.info(f"Successfully loaded the sensor {new_sensor.sensor_name}")
 
-        if not isinstance(sensor_map[sensor], list):
-            logger.warning(
-                f"SENSOR {sensor.__name__} DID NOT RETURN A LIST OF FUNCTIONS FOR get_read_functions"
-            )
-            sensor_map.pop(sensor, None)
-
-        logger.info(f"Successfully loaded the sensor {sensor.__name__}")
-
-    logger.info(f"Sensors Loaded Successfully! {sensor_map}")
+    logger.info("Sensors Loaded Successfully!")
 
 
 def read_sensor_loop(ctx: AppContext):
     """
     Running loop for the sensor reading thread
     """
-    global sensor_map, current_sequence_number
+    global loaded_sensors, current_sequence_number
 
     while not ctx.thread_shutdown.is_set():
         newest_map: dict[str, float] = {}
 
-        for sensor, func_list in list(sensor_map.items()):
-            error_updating_sensor: Exception | None = update_sensor(ctx, sensor)
+        for sensor in loaded_sensors:
+            error_updating_sensor: Exception | None = update_sensor(sensor)
 
             if error_updating_sensor:
                 logger.warning(f"{error_updating_sensor}")
                 continue
 
-            for function in func_list:
-                newest_map.update(function())
+            newest_map.update(sensor.read())
+
+        new_reading: dict[str, float | None] = {
+            "temperature": newest_map.get("temperature"),
+            "humidity": newest_map.get("humidity"),
+            "pressure": newest_map.get("pressure"),
+            "voc": newest_map.get("voc"),
+            "wind_speed": newest_map.get("wind_speed"),
+            "co2": newest_map.get("co2"),
+            "precipitation": newest_map.get("precipitation"),
+        }
 
         new_data: ProbeData = ProbeData(
             sequence=current_sequence_number,
@@ -145,9 +141,7 @@ def read_sensor_loop(ctx: AppContext):
             precipitation=newest_map.get("precipitation"),
         )
 
-        logger.info(
-            f"Reading: \nTemperature: {newest_map.get('temperature')}\n Humidity: {newest_map.get('humidity')}\n Pressure: {newest_map.get('pressure')}\n VOC:{newest_map.get('voc')}\n CO2:{newest_map.get('co2')}"
-        )
+        ctx.event_bus.publish("probe_data", new_reading)
         ctx.latest_reading = new_data
 
         ctx.event_loop.call_soon_threadsafe(ctx.server_update.set)
@@ -157,3 +151,15 @@ def read_sensor_loop(ctx: AppContext):
         current_sequence_number += 1
 
         time.sleep(SENSOR_READING_DEBOUNCE_TIME)
+
+
+def get_sensor_status(ctx) -> dict[str, bool]:
+    sensor_data: dict[str, bool] = {}
+
+    for sensor in loaded_sensors:
+        sensor_data[sensor.sensor_name] = True
+
+    for sensor in failed_sensors:
+        sensor_data[sensor.sensor_name] = False
+
+    return sensor_data
