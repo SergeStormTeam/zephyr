@@ -120,16 +120,6 @@ def read_sensor_loop(ctx: AppContext):
 
             newest_map.update(sensor.read())
 
-        new_reading: dict[str, float | None] = {
-            "temperature": newest_map.get("temperature"),
-            "humidity": newest_map.get("humidity"),
-            "pressure": newest_map.get("pressure"),
-            "voc": newest_map.get("voc"),
-            "wind_speed": newest_map.get("wind_speed"),
-            "co2": newest_map.get("co2"),
-            "precipitation": newest_map.get("precipitation"),
-        }
-
         new_data: ProbeData = ProbeData(
             sequence=current_sequence_number,
             temperature=newest_map.get("temperature"),
@@ -141,7 +131,7 @@ def read_sensor_loop(ctx: AppContext):
             precipitation=newest_map.get("precipitation"),
         )
 
-        ctx.event_bus.publish("probe_data", new_reading)
+        ctx.event_bus.publish("probe_data_update", new_data.json_data())
         ctx.latest_reading = new_data
 
         ctx.event_loop.call_soon_threadsafe(ctx.server_update.set)

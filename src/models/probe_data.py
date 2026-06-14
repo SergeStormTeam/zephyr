@@ -1,10 +1,8 @@
 import time
 
-from dataclasses import dataclass, field
 import uuid_utils as uuid
 
 
-@dataclass(slots=True)
 class ProbeData:
     """
     Class for data readings taken by the probe during operation.
@@ -24,14 +22,50 @@ class ProbeData:
         timestamp (float): An automatically generated timestamp using the Unix epoch
     """
 
-    sequence: int
-    temperature: float | None
-    humidity: float | None
-    pressure: float | None
-    voc: float | None
-    wind_speed: float | None
-    co2: float | None
-    precipitation: float | None
+    def __init__(
+        self,
+        sequence: int,
+        temperature: float | None = None,
+        humidity: float | None = None,
+        pressure: float | None = None,
+        voc: float | None = None,
+        wind_speed: float | None = None,
+        co2: float | None = None,
+        precipitation: float | None = None,
+    ) -> None:
 
-    record_id: str = field(default_factory=lambda: str(uuid.uuid7()))
-    timestamp: float = field(default_factory=time.time)
+        self.sequence: int = sequence
+        self.temperature: float | None = temperature
+        self.humidity: float | None = humidity
+        self.pressure: float | None = pressure
+        self.voc: float | None = voc
+        self.wind_speed: float | None = wind_speed
+        self.co2: float | None = co2
+        self.precipitation: float | None = precipitation
+
+        self.record_id: str = str(uuid.uuid7())
+        self.timestamp: float = time.time()
+
+    def json(self) -> dict[str, float | None | str]:
+        return {
+            "temperature": self.temperature,
+            "humidity": self.humidity,
+            "pressure": self.pressure,
+            "voc": self.voc,
+            "wind_speed": self.wind_speed,
+            "co2": self.co2,
+            "precipitation": self.precipitation,
+            "record_id": self.record_id,
+            "timestamp": self.timestamp,
+        }
+
+    def json_data(self) -> dict[str, float | None | str]:
+        return {
+            "temperature": self.temperature,
+            "humidity": self.humidity,
+            "pressure": self.pressure,
+            "voc": self.voc,
+            "wind_speed": self.wind_speed,
+            "co2": self.co2,
+            "precipitation": self.precipitation,
+        }
