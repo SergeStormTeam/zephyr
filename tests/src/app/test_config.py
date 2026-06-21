@@ -10,10 +10,10 @@ def import_config_module() -> object:
             object: The imported config module.
     """
 
-    if "config" in sys.modules:
+    if "app.config" in sys.modules:
         del sys.modules["config"]
 
-    return importlib.import_module("config")
+    return importlib.import_module("app.config")
 
 
 def test_get_env_variable(monkeypatch) -> None:

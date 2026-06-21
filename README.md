@@ -79,6 +79,6 @@ sudo apt update && sudo apt install -y liblgpio-dev
 
 We're using the pytest framework to create tests. A good minimum coverage requirement is about <=90%.
 
-To run the tests just run: `pytest`
+To run the tests just run: `uv run pytest`
 
 `coverage.xml` and `htmlcov` should be generated. `coverage.xml` is used for Sonarqube, while `htmlcov` is a local html view into code coverage. The easiest way to view the coverage site is to enter the directory and run: `python -m http.server` and visit the site!
