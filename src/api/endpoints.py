@@ -9,10 +9,6 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 @router.websocket("/dashboard")
 async def dashboard(websocket: WebSocket) -> None:
-    """
-    Data Types:
-        initalization
-
-    """
+    """ """
     await websocket.accept()
     await command_handler.hook_websocket(websocket)
