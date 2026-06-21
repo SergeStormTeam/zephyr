@@ -18,7 +18,7 @@ RUN wget -q https://abyz.me.uk/lg/lg.zip && \
     cd .. && rm -rf lg lg.zip
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen
+RUN uv sync --group pi --frozen
 
 FROM ghcr.io/astral-sh/uv:python3.14-bookworm
 

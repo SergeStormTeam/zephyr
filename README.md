@@ -47,7 +47,7 @@ __uv add --group $GROUP $PACKAGE__: Same as UV add, but adds the package to the 
     * Fish: `source .venv/bin/activate.fish`
     * Windows: `.venv\Scripts\activate`
     * Other: Good luck!
-3. Run: `uv sync --all-groups`
+3. Run: `uv sync --group dev --group tests`
 4. Run: `pre-commit install`
 5. You're all set!
 
