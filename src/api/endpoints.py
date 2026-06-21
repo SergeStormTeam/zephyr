@@ -9,6 +9,8 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 @router.websocket("/dashboard")
 async def dashboard(websocket: WebSocket) -> None:
-    """ """
+    """
+    Dashboard endpoint to send and recieve latest updates
+    """
     await websocket.accept()
     await command_handler.hook_websocket(websocket)
