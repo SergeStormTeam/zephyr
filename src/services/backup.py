@@ -72,7 +72,7 @@ async def backup_data(ctx: AppContext):
                     db.commit()
 
                 except Exception as e:
-                    logger.exception("FAILED TO BACKUP")
+                    logger.warning("FAILED TO BACKUP")
                     database.log_event(f"FAILED TO BACKUP! {e}", logging.WARNING)
                     db.rollback()
                 await asyncio.sleep(DATABASE_BACKUP_DEBOUNCE)

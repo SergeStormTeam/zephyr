@@ -3,7 +3,10 @@ from app.context import CurrentContext as ctx
 from queue import Empty
 
 from services import sensor_reader
+import asyncio
+import logging
 
+logger: logging.Logger = logging.getLogger(__name__)
 
 async def manage_connection(websocket: WebSocket) -> None:
 
@@ -27,7 +30,7 @@ async def manage_connection(websocket: WebSocket) -> None:
                 }
             )
 
-        while not ctx.thread_shutdown.is_set() and websocket:
+        while not ctx.thread_shutdown.is_set():
             try:
                 new_data: dict[str, float] = probe_data_update.get_nowait()
                 await websocket.send_json(data={"type": "probe_data", "data": new_data})
@@ -41,10 +44,13 @@ async def manage_connection(websocket: WebSocket) -> None:
                 )
             except Empty:
                 pass
+            await asyncio.sleep(1)
     except WebSocketDisconnect:
         pass
+    except Exception as e:
+        logger.warning(f"Failed to continue websocket connection! {e}")
     finally:
-        ctx.event_bus.unsubscribe("probe_data", probe_data_update)
+        ctx.event_bus.unsubscribe("probe_data_update", probe_data_update)
         ctx.event_bus.unsubscribe("sensor_status_update", sensor_update)
 
     return
