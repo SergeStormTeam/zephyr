@@ -1,6 +1,5 @@
 import os
 import logging
-import uuid
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -8,27 +7,16 @@ load_dotenv()
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-def _generate_session_id() -> str:
-    """
-    Generates a New UUID using the UUID7 formating
-
-    Returns:
-        str: The generated UUID in string form
-    """
-    generated_uuid: uuid.UUID = uuid.uuid7()
-    return str(generated_uuid)
-
-
 def _get_env_variable(name: str, default: str | None = None) -> str | None:
     """
     Retrieves an environment variable, with an optional default value.
 
     Args:
-            name (str): The name of the environment variable to retrieve.
-            default (str | None): An optional default value to return if the environment variable is not set.
+        name (str): The name of the environment variable to retrieve.
+        default (str | None): An optional default value to return if the environment variable is not set.
 
     Returns:
-            str | None: The value of the environment variable, or the default value if it is not set.
+        str | None: The value of the environment variable, or the default value if it is not set.
     """
 
     try:
@@ -48,9 +36,18 @@ def _get_env_variable(name: str, default: str | None = None) -> str | None:
 
 # General Settings
 BASE_DIR: str = os.path.dirname(os.path.abspath(__file__))
-SESSION_ID: str = _generate_session_id()
 
-SEND_DATA_TO_SERVER: bool = False
+# Server Settings
+WEBSOCKET_RECONNECT_DEBOUNCE: int = 20
+DATABASE_BACKUP_DEBOUNCE: int = 3
+DATABASE_UPLOAD_BATCH_SIZE: int = 150
+
+HTTP_URL: str | None = _get_env_variable("HTTP_URL")
+
+SERVER_WS_URL: str | None = _get_env_variable("SERVER_WS_URL")
+LAPTOP_WS_URL: str | None = _get_env_variable("LAPTOP_WS_URL")
+
+SERVER_API_KEY: str | None = _get_env_variable("SERVER_API_KEY")
 
 # Database Settings
 DATABASE_FILENAME: str = "probedata.db"
@@ -59,3 +56,4 @@ DATABASE_QUEUE_MAX_SIZE: int = 1000
 # Sensor Setting
 SEA_LEVEL_PRESSURE: int = 1013
 SENSOR_FAIL_SHUTDOWN_LIMIT: int = 5
+SENSOR_READING_DEBOUNCE_TIME: float = 5

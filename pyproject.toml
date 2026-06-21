@@ -7,9 +7,15 @@ requires-python = ">=3.14"
 dependencies = [
     "adafruit-blinka>=9.1.0",
     "adafruit-circuitpython-bme280>=2.6.32",
+    "adafruit-circuitpython-sgp30>=3.0.16",
     "dotenv>=0.9.9",
+    "fastapi>=0.136.3",
+    "httpx>=0.28.1",
     "sgp30>=0.1.6",
+    "uuid-utils>=0.16.0",
+    "uvicorn>=0.49.0",
     "w1thermsensor>=2.3.0",
+    "websockets>=16.0",
 ]
 
 [dependency-groups]
@@ -20,4 +26,7 @@ dev = [
 ]
 tests = [
     "pytest>=9.0.3",
+]
+pi = [
+    "lgpio==0.2.2.0; sys_platform == 'linux'",
 ]
