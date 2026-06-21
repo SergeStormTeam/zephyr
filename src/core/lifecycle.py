@@ -2,7 +2,7 @@ import threading
 import logging
 from app.context import AppContext
 
-from services import sensor_reader, backup, websocket_connections
+from services import sensor_reader, backup
 from db import database
 
 import uuid_utils as uuid
@@ -24,9 +24,10 @@ def _generate_session_id() -> str:
 def start_session(ctx: AppContext) -> bool:
     if ctx.session_active:
         return False
+
     ctx.thread_shutdown.clear()
 
-    logger.info("Starting Initalization Sequence!")
+    logger.info("Starting Initialization Sequence!")
 
     # sensor_reader.initalize_sensors(ctx=running_context)
     # database.initialize_database()
@@ -47,22 +48,26 @@ def start_session(ctx: AppContext) -> bool:
     )
     ctx.database_backup_thread.start()
 
-    ctx.server_live_update_thread = threading.Thread(
-        target=websocket_connections.run_websocket_loops, args=(ctx,)
-    )
+    # ctx.server_live_update_thread = threading.Thread(
+    #     target=websocket_connections.run_websocket_loops, args=(ctx,)
+    # )
+    # ctx.server_live_update_thread.start()
+
     ctx.session_id = _generate_session_id()
 
     database.log_event(f"STARTED APPLICATION: {ctx.session_id}", logging.INFO)
     logger.info(
-        f"Succussfully Initalized All Applications! Current Session ID: {ctx.session_id}"
+        f"Successfully Initalized All Applications! Current Session ID: {ctx.session_id}"
     )
 
+    ctx.session_active = True
     return True
 
 
 def stop_session(ctx: AppContext) -> bool:
     if not ctx.session_active or ctx.thread_shutdown.is_set():
         return False
+
     ctx.thread_shutdown.set()
 
     logger.info("Starting shutdown sequence!")
@@ -82,11 +87,11 @@ def stop_session(ctx: AppContext) -> bool:
         ctx.filewriting_thread = None
     logger.info("Stopped Filewriting Thread!")
 
-    if ctx.server_live_update_thread:
-        logger.info("Stopping websocket thread!")
-        ctx.server_live_update_thread.join()
-        ctx.server_live_update_thread = None
-    logger.info("Websocket thread stopped.")
+    # if ctx.server_live_update_thread:
+    #     logger.info("Stopping websocket thread!")
+    #     ctx.server_live_update_thread.join()
+    #     ctx.server_live_update_thread = None
+    # logger.info("Websocket thread stopped.")
 
     if ctx.database_backup_thread:
         logger.info("Stopping database backup thread!")

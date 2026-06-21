@@ -15,5 +15,4 @@ async def dashboard(websocket: WebSocket) -> None:
 
     """
     await websocket.accept()
-
-    await command_handler.manage_connection(websocket)
+    await command_handler.hook_websocket(websocket)
