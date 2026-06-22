@@ -24,6 +24,7 @@ def _generate_session_id() -> str:
 def start_session(ctx: AppContext) -> bool:
     if ctx.session_active:
         return False
+    ctx.session_id = _generate_session_id()
 
     ctx.thread_shutdown.clear()
 
@@ -53,14 +54,21 @@ def start_session(ctx: AppContext) -> bool:
     # )
     # ctx.server_live_update_thread.start()
 
-    ctx.session_id = _generate_session_id()
-
     database.log_event(f"STARTED APPLICATION: {ctx.session_id}", logging.INFO)
     logger.info(
         f"Successfully Initalized All Applications! Current Session ID: {ctx.session_id}"
     )
 
     ctx.session_active = True
+    ctx.event_bus.publish("session_update", {"session": True, "id": ctx.session_id})
+    ctx.event_bus.publish(
+        "notification",
+        {
+            "text": "Successfully Started a New Active Session!",
+            "desc": f"Id: {ctx.session_id}",
+        },
+    )
+
     return True
 
 
@@ -102,4 +110,8 @@ def stop_session(ctx: AppContext) -> bool:
     logger.info("Shutdown complete.")
 
     ctx.session_active = False
+    ctx.event_bus.publish("session_update", {"session": False})
+    ctx.event_bus.publish(
+        "notification", {"text": "Successfully Stopped Active Session!"}
+    )
     return True

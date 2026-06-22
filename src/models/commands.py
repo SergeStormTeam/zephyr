@@ -11,8 +11,14 @@ class StopProbeCommand(BaseModel):
     type: Literal["stop_probe"]
 
 
+class SetProbeMode(BaseModel):
+    type: Literal["probe_mode"]
+    mode: Literal["test", "drive", "field"]
+
+
 Command = Annotated[
-    Union[StartProbeCommand, StopProbeCommand], Field(discriminator="type")
+    Union[StartProbeCommand, StopProbeCommand, SetProbeMode],
+    Field(discriminator="type"),
 ]
 
-command_adapter = TypeAdapter(Command)
+command_adapter: TypeAdapter = TypeAdapter(Command)
