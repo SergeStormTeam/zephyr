@@ -281,10 +281,10 @@ def update_database_loop(ctx: AppContext):
     Running loop for the database writing thread
     """
 
-    loop_database: sqlite3.Connection = sqlite3.connect(
+    db: sqlite3.Connection = sqlite3.connect(
         f"{BASE_DIR}/data/{DATABASE_FILENAME}", timeout=30.0
     )
-    cursor: sqlite3.Cursor = loop_database.cursor()
+    cursor: sqlite3.Cursor = db.cursor()
 
     try:
         while True:
@@ -297,19 +297,20 @@ def update_database_loop(ctx: AppContext):
                 continue
 
             try:
-                if isinstance(new_entry, ProbeEvent):
-                    process_log_event(ctx, cursor, new_entry)
-                elif isinstance(new_entry, ProbeData):
-                    process_sensor_data(ctx, cursor, new_entry)
-                else:
-                    logger.warning(f"Unknown entry in the queue! {new_entry}")
+                if ctx.probe_mode != "test":
+                    if isinstance(new_entry, ProbeEvent):
+                        process_log_event(ctx, cursor, new_entry)
+                    elif isinstance(new_entry, ProbeData):
+                        process_sensor_data(ctx, cursor, new_entry)
+                    else:
+                        logger.warning(f"Unknown entry in the queue! {new_entry}")
             except Exception as e:
                 logger.exception(
                     f"Failed to process entry, reverting! {new_entry} with error {e}"
                 )
-                loop_database.rollback()
+                db.rollback()
             else:
-                loop_database.commit()
+                db.commit()
     finally:
-        loop_database.commit()
-        loop_database.close()
+        db.commit()
+        db.close()

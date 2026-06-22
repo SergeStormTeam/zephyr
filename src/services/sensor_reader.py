@@ -131,7 +131,9 @@ def read_sensor_loop(ctx: AppContext):
             precipitation=newest_map.get("precipitation"),
         )
 
-        ctx.event_bus.publish("probe_data_update", new_data.json_data())
+        ctx.event_bus.publish(
+            "probe_data_update", new_data.json(get_record_id=True, get_timestamp=True)
+        )
         ctx.latest_reading = new_data
 
         ctx.event_loop.call_soon_threadsafe(ctx.server_update.set)

@@ -46,8 +46,10 @@ class ProbeData:
         self.record_id: str = str(uuid.uuid7())
         self.timestamp: float = time.time()
 
-    def json(self) -> dict[str, float | None | str]:
-        return {
+    def json(
+        self, get_record_id: bool = False, get_timestamp: bool = False
+    ) -> dict[str, float | None | str]:
+        return_map: dict[str, float | None | str] = {
             "temperature": self.temperature,
             "humidity": self.humidity,
             "pressure": self.pressure,
@@ -55,17 +57,11 @@ class ProbeData:
             "wind_speed": self.wind_speed,
             "co2": self.co2,
             "precipitation": self.precipitation,
-            "record_id": self.record_id,
-            "timestamp": self.timestamp,
         }
 
-    def json_data(self) -> dict[str, float | None | str]:
-        return {
-            "temperature": self.temperature,
-            "humidity": self.humidity,
-            "pressure": self.pressure,
-            "voc": self.voc,
-            "wind_speed": self.wind_speed,
-            "co2": self.co2,
-            "precipitation": self.precipitation,
-        }
+        if get_record_id:
+            return_map["record_id"] = self.record_id
+
+        if get_timestamp:
+            return_map["timestamp"] = self.timestamp
+        return return_map

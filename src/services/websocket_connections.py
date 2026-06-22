@@ -113,18 +113,7 @@ async def initialize_server_connection(ctx: AppContext):
                     if not reading:
                         continue
 
-                    data: dict[str, float | None] = {
-                        "timestamp": reading.timestamp,
-                        "temperature": reading.temperature,
-                        "co2": reading.co2,
-                        "humidity": reading.humidity,
-                        "precipitation": reading.precipitation,
-                        "pressure": reading.pressure,
-                        "voc": reading.voc,
-                        "wind_speed": reading.wind_speed,
-                    }
-
-                    await client.send(json.dumps(data))
+                    await client.send(json.dumps(reading.json(get_timestamp=True)))
         except Exception as e:
             if ctx.server_connected:
                 logger.warning(f"SERVER WEBSOCKET DISCONNECTED! {e}")
